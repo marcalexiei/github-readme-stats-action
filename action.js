@@ -166,7 +166,8 @@ export const run = async () => {
 
   const handler = resolveCardHandler(coreModule, card, query);
 
-  const outputPathValue = outputPathInput || path.join("profile", `${card}.svg`);
+  const outputPathValue =
+    outputPathInput || path.join("profile", `${card}.svg`);
   const outputPath = path.resolve(process.cwd(), outputPathValue);
 
   const result = await handler(query);
@@ -191,4 +192,3 @@ export const run = async () => {
   info(`Wrote ${outputPath}`);
   setOutput("path", outputPathValue);
 };
-
