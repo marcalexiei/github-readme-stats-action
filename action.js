@@ -118,35 +118,6 @@ export const parseOptions = (value) => {
 };
 
 /**
- * Validate the requested card and resolve its handler.
- * @param {Record<string, unknown>} coreModule Loaded core package module.
- * @param {string} card Card type.
- * @param {Record<string, string>} query Parsed options.
- * @returns {Function} Card handler.
- * @throws {Error} If the card, a core export or a required option is missing.
- */
-const resolveCardHandler = (coreModule, card, query) => {
-  const cardDef = CARDS[card];
-  if (!cardDef) {
-    throw new Error(`Unsupported card type: ${card}`);
-  }
-
-  for (const { exportName } of Object.values(CARDS)) {
-    if (typeof coreModule[exportName] !== "function") {
-      throw new Error(
-        `Loaded ${CORE_PACKAGE_NAME} does not expose the expected '${exportName}' function.`,
-      );
-    }
-  }
-
-  if (!query[cardDef.requires]) {
-    throw new Error(`${cardDef.requires} is required for the ${card} card.`);
-  }
-
-  return coreModule[cardDef.exportName];
-};
-
-/**
  * Generate the requested card and write it to disk.
  */
 export const run = async () => {
@@ -156,15 +127,37 @@ export const run = async () => {
   const coreVersion = validateCoreVersion(getInput("core_version"));
   const failOnError = /^(true|1|yes)$/i.test(getInput("fail_on_error"));
 
-  const coreModule = await loadCoreModule(coreVersion);
-
-  const query = parseOptions(optionsInput);
-  if (!query.username && process.env.GITHUB_REPOSITORY_OWNER) {
-    query.username = process.env.GITHUB_REPOSITORY_OWNER;
-    warning("username not provided; defaulting to repository owner.");
+  const cardDef = CARDS[card];
+  if (!cardDef) {
+    throw new Error(`Unsupported card type: ${card}`);
   }
 
-  const handler = resolveCardHandler(coreModule, card, query);
+  const coreModule = await loadCoreModule(coreVersion);
+
+  for (const { exportName } of Object.values(CARDS)) {
+    if (typeof coreModule[exportName] !== "function") {
+      throw new Error(
+        `Loaded ${CORE_PACKAGE_NAME} does not expose the expected '${exportName}' function.`,
+      );
+    }
+  }
+
+  const query = parseOptions(optionsInput);
+
+  if (!query.username && process.env.GITHUB_REPOSITORY_OWNER) {
+    // keep previous behavior for backwards compatibility;
+    // repo cards may use `username` even though it's not required
+    query.username = process.env.GITHUB_REPOSITORY_OWNER;
+    if (cardDef.requires === "username") {
+      warning("username not provided; defaulting to repository owner.");
+    }
+  }
+
+  if (!query[cardDef.requires]) {
+    throw new Error(`${cardDef.requires} is required for the ${card} card.`);
+  }
+
+  const handler = coreModule[cardDef.exportName];
 
   const outputPathValue =
     outputPathInput || path.join("profile", `${card}.svg`);
